@@ -12,15 +12,11 @@ Evaluate 1000 A/B tests to identify statistically significant effects on average
 - Reduces variance between experimental groups
 - Improves test sensitivity
 
-### 2. **CUPED (Controlled Experiment Using Pre-Experiment Data)**
-- Uses pre-experiment covariates to reduce variance
-- Correlates current outcomes with historical behavior
-- Significantly increases statistical power
-
-### 3. **Machine Learning Covariate Adjustment**
-- Implements simple predictive models to estimate expected revenue
-- Uses model predictions as covariates in statistical tests
-- Enhances detection of true treatment effects
+### 2. **CUPED with Machine Learning Covariates**
+- Uses machine learning model to predict expected revenue based on historical behavior
+- Employs model predictions as optimal covariates in CUPED framework
+- Significantly improves detection of true treatment effects
+- Automatically selects the most informative covariates from user history
 
 ### Project Structure
 ├── solution.py          # Main Flask application
@@ -28,7 +24,5 @@ Evaluate 1000 A/B tests to identify statistically significant effects on average
 ├── Develop.ipynb        # Development and analysis notebook
 
 ├── df_sales_public.csv  # Sales dataset
-
-├── requirements.txt     # Python dependencies
 
 └── README.md           # Project documentation
