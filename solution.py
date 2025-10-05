@@ -6,7 +6,8 @@ import pandas as pd
 from scipy import stats
 from flask import Flask, jsonify, request
 from collections import Counter
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Any
+from collections.abc import Iterable
 
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
@@ -19,10 +20,6 @@ EXP_DAYS = [36, 37, 38, 39, 40, 41, 42]
 
 # получение данных о покупках
 df_sales = pd.read_csv(os.environ['PATH_DF_SALES'])
-# предобработка данных
-
-# user_id_2_metric = df_sales.groupby('user_id')['cost'].sum().to_dict()
-# get_metric = lambda user_id: user_id_2_metric.get(user_id, 0)
 
 ########################### STRATIFICATION ###########################
 
@@ -100,6 +97,12 @@ get_strat = lambda user_id: user_by_strat.get(user_id, DEFAULT_STRAT)
 ############################### CUPED ###################################
 
 class FunctionalTransformer(BaseEstimator, TransformerMixin):
+    '''
+    Wraps a DataFrame transformation function into a class with fit and predict methods
+
+    :param function: - callable function transfrom pandas dataframe
+    :param params: - params necessery for function
+    '''
     def __init__(self, function, **params):
         self.function = function
         self.params = params
@@ -125,12 +128,26 @@ class FunctionalTransformer(BaseEstimator, TransformerMixin):
         return self
     
 def functional_transformer(function):
+    '''
+        Wrap function  for FunctionalTransformer
+        :param function: - callable function transfrom pandas dataframe
+        :param params: - params necessery for function
+        :return class FunctionalTransformer: 
+    '''
     def builder(**params):
         return FunctionalTransformer(function, **params)
     return builder
 
 @functional_transformer
 def get_features(df:pd.DataFrame, first_exp_day:int, lookback_window:int=7, forward_window:int=7)->pd.DataFrame:
+    ''' Calculate preperiod features. Calculate target metric
+    :param df: - data
+    :param first_exp_day: - first pilot day
+    :param lookback_window: - define preperiod window for calcualtion metrics
+    :param forward_window: - pilot duration
+
+    :return DataFrame: - data with calculated metric (by user id)
+    '''
     # preperiod
     day_filter = np.arange(first_exp_day - lookback_window, first_exp_day)
 
@@ -160,13 +177,12 @@ def get_features(df:pd.DataFrame, first_exp_day:int, lookback_window:int=7, forw
     result = result.join(target)
     return result
 
-def calculate_theta(y_pilot,  y_pilot_cov) -> float:
-    """Вычисляем Theta.
+def calculate_theta(y_pilot:Iterable[float],  y_pilot_cov:Iterable[float]) -> float:
+    """Calculate CUPED Theta.
 
-    y_control - значения метрики во время пилота на контрольной группе
-    y_pilot - значения метрики во время пилота на пилотной группе
-    y_control_cov - значения ковариант на контрольной группе
-    y_pilot_cov - значения ковариант на пилотной группе
+    :param y_pilot: - target metric
+    :param y_pilot_cov: - covariate of target metric
+    :return float: - 
     """
     if not isinstance(y_pilot, np.ndarray):
         y_pilot = np.array(y_pilot).flatten()
@@ -181,7 +197,7 @@ def calculate_theta(y_pilot,  y_pilot_cov) -> float:
     theta = covariance / variance
     return float(theta)
 
-ISNA_FILTER = lambda df: ~df.isna().apply(any, axis=1)
+ISNA_FILTER = lambda df: ~df.isna().apply(any, axis=1) # filter rows with any nan values
 
 # define feature processor 
 feature_extractor = get_features(first_exp_day=EXP_DAYS[0], 
@@ -218,7 +234,7 @@ theta = calculate_theta(tmp_aline['metric'], tmp_aline['cov'])
 
 # calculate metric CUPED
 user_id_2_cuped = {}
-MEAN = float(np.mean(list(user_id_2_covariate.values())))
+MEAN = float(np.mean(list(user_id_2_covariate.values()))) 
 for user, metric in user_id_2_metric.items():
     user_id_2_cuped[user] = metric - theta * user_id_2_covariate.get(user, MEAN)
 
@@ -227,25 +243,12 @@ get_metric = lambda user_id: user_id_2_cuped.get(user_id, 0)
 
 app = Flask(__name__)
 
-
-# def check_test(a, b):
-#     """Проверяет гипотезу.
-    
-#     :param a: список id пользователей контрольной группы
-#     :param b: список id пользователей экспериментальной группы
-#     :return: 1 - внедряем изменение, 0 - иначе.
-#     """
-#     metrics_a = [get_metric(user_id) for user_id in a]
-#     metrics_b = [get_metric(user_id) for user_id in b]
-#     pvalue = stats.ttest_ind(metrics_a, metrics_b).pvalue
-#     return int(pvalue < ALPHA)
-
 def check_test(a, b):
-    """Проверяет гипотезу.
+    """check hypothesis.
     
-    :param a: список id пользователей контрольной группы
-    :param b: список id пользователей экспериментальной группы
-    :return: 1 - внедряем изменение, 0 - иначе.
+    :param a: user id control list
+    :param b: user id pilot list
+    :return: 1 - introduce a change, 0 - otherwise.
     """
     metrics_a = [get_metric(user_id) for user_id in a]
     metrics_b = [get_metric(user_id) for user_id in b]
