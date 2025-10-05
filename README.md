@@ -24,7 +24,11 @@ Evaluate 1000 A/B tests to identify statistically significant effects on average
 
 ### Project Structure
 ├── solution.py          # Main Flask application
+
 ├── Develop.ipynb        # Development and analysis notebook
+
 ├── df_sales_public.csv  # Sales dataset
+
 ├── requirements.txt     # Python dependencies
+
 └── README.md           # Project documentation
